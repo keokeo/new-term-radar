@@ -22,7 +22,9 @@
     "dang":          {"index": "https://dang.ai/sitemap.xml", "pause": 2},
     "clipfly":       {"index": "https://www.clipfly.ai/sitemaps/en.xml", "pause": 2, "strip_locale": true},
     "aitoptools":    {"index": "https://aitoptools.com/sitemap.xml", "pause": 2},
-    "futurepedia":   {"index": "https://www.futurepedia.io/sitemap_tools.xml", "pause": 2}
+    "futurepedia":   {"index": "https://www.futurepedia.io/sitemap_tools.xml", "pause": 2},
+    "dreamina": {"index": "https://dreamina.capcut.com/sitemap.xml", "recursive": true, "allowed_host": "dreamina.capcut.com", "path_prefixes": ["/ai-image/", "/ai-video/", "/resource/", "/create/", "/seedance/", "/tools/", "/ai-model/", "/ai-voice/", "/seedream/", "/blog/"], "max_sitemaps": 24, "keep_seen": true, "respect_robots": true, "pause": 2, "shards": "(?:/article/sitemap_index\\.xml$)|(?:/default/[^/]+\\.xml$)"},
+    "mediaio": {"index": "https://www.media.io/sitemap.xml", "recursive": false, "allowed_host": "www.media.io", "path_prefixes": ["/ai/explore/zone/"], "max_sitemaps": 24, "keep_seen": true, "respect_robots": true, "pause": 2}
   },
 
   "topics": {

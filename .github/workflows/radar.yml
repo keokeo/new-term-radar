@@ -13,11 +13,11 @@ name: New-term radar
 # RESEND_API_KEY, EMAIL_FROM, RADAR_EMAIL_TO (mail the reports),
 # GSC_TOKEN_JSON (the Search Console signal).
 #
-# State (state/radar.db and the snapshots) lives in the Actions cache: one entry per
-# run, restored by prefix, so the repository does not grow. A missing cache only means
-# the next run builds new snapshots and reports nothing that day; the leads database
-# would start over, so download the "radar-state" artifact now and then if you care
-# about the review's history.
+# State lives in a shared Actions cache, with one entry per run attempt. The two
+# competitor seeds only fill missing snapshots. A missing cache still loses other
+# source history, so keep the uploaded state backups when that history matters.
+# Manual "competitors" validates only public sitemap scopes in a temporary copy;
+# it has no API/mail credentials and leaves new URLs for the next daily report.
 
 on:
   schedule:
@@ -26,7 +26,13 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "daily or sources"
+        description: "daily / sources, or free competitor sitemap validation"
+        type: choice
+        options:
+          - daily
+          - sources
+          - competitors
+        required: true
         default: "daily"
 
 concurrency:
@@ -53,13 +59,23 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Restore the state
+        id: restore-state
         uses: actions/cache/restore@v4
         with:
           path: state
-          key: radar-state-${{ github.run_id }}
+          key: radar-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: radar-state-
 
+      - name: Import missing competitor baselines
+        id: competitor-seed
+        run: python scripts/seed_competitor_sitemaps.py
+
+      - name: Validate the two competitor sitemaps (free, no email)
+        if: env.COMMAND == 'competitors'
+        run: python scripts/check_competitor_sitemaps.py
+
       - name: Run the radar
+        if: env.COMMAND != 'competitors'
         env:
           AISA_API_KEY: ${{ secrets.AISA_API_KEY }}
           GOANYAPI_API_KEY: ${{ secrets.GOANYAPI_API_KEY }}
@@ -71,26 +87,42 @@ jobs:
         run: |
           if [ "$COMMAND" = "daily" ]; then
             python -m radar daily --skip x,hf --out report.md ${RADAR_EMAIL_TO:+--mail}
-          else
+          elif [ "$COMMAND" = "sources" ]; then
             python -m radar sources --out report.md ${RADAR_EMAIL_TO:+--mail}
+          else
+            echo "Unknown radar command" >&2
+            exit 2
           fi
-          if [ -f report.md ]; then cat report.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Show the report
+        if: always()
+        run: |
+          if [ "$COMMAND" = "competitors" ] && [ -f competitors-report.md ]; then
+            cat competitors-report.md >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f report.md ]; then
+            cat report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Save the state
-        if: always()
+        if: always() && steps.competitor-seed.outcome == 'success'
         uses: actions/cache/save@v4
         with:
           path: state
-          key: radar-state-${{ github.run_id }}
+          key: radar-state-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Keep the report and the state
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: radar-${{ env.COMMAND }}-${{ github.run_id }}
+          name: radar-${{ env.COMMAND }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             report.md
             report.json
+            competitors-report.md
+            competitors-report.json
+            competitors-status.json
             state/radar.db
+            state/sitemaps/dreamina.json.gz
+            state/sitemaps/mediaio.json.gz
           if-no-files-found: ignore
           retention-days: 30
