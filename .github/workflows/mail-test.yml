@@ -1,0 +1,64 @@
+name: Test radar email
+
+# Manual delivery check only. The resend.dev sender can send only to the
+# email address associated with the Resend account.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: radar-mail-test
+  cancel-in-progress: false
+
+jobs:
+  mail-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Send a test email
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RADAR_EMAIL_TO: ${{ secrets.RADAR_TEST_EMAIL_TO }}
+          EMAIL_FROM: onboarding@resend.dev
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from radar import notify
+
+          for name in ("RESEND_API_KEY", "RADAR_EMAIL_TO"):
+              if not os.environ.get(name, "").strip():
+                  setting = "RADAR_TEST_EMAIL_TO" if name == "RADAR_EMAIL_TO" else name
+                  raise SystemExit(f"Set the repository secret {setting} before running this test.")
+          if len(notify.recipients(os.environ["RADAR_EMAIL_TO"])) != 1:
+              raise SystemExit("Set RADAR_TEST_EMAIL_TO to your single Resend account email address.")
+
+          message = "\n".join([
+              "## 新词雷达 · 邮件推送测试",
+              "",
+              "这是一封由 GitHub Actions 发送的测试邮件。",
+              "",
+              "| 检查项 | 内容 |",
+              "|---|---|",
+              "| 中文显示 | 你好，邮件测试 |",
+              "| 表格显示 | 请确认这一行显示正常 |",
+              "",
+              "收到此邮件后，请确认正文和表格显示正常。",
+          ])
+          result = notify.send("新词雷达 · 邮件推送测试", message)
+          if not result.startswith("mail sent ("):
+              raise SystemExit(result)
+          print(result)
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write("## 邮件测试\n\n发送服务已接受测试邮件请求，请检查收件箱和垃圾邮件文件夹。\n")
+          PY
