@@ -15,7 +15,7 @@
     "mcp.so":        {"index": "https://mcp.so/sitemap.xml", "shards": "section=(servers|agents|cli|clients|posts)\\b", "pause": 2},
     "lobehub-mcp":   {"index": "https://lobehub.com/sitemap/mcp.xml", "pause": 5, "strip_locale": true},
     "lobehub-skills": {"index": "https://lobehub.com/sitemap/skills.xml", "pause": 5, "strip_locale": true},
-    "toolify":       {"index": "https://www.toolify.ai/sitemap.xml", "shards": "sitemap_tools_(1[6-9]|[2-9]\\d)\\.xml$", "pause": 5, "strip_locale": true},
+    "toolify":       {"index": "https://www.toolify.ai/sitemap.xml", "shards": "sitemap_tools_(1[4-9]|[2-9]\\d)\\.xml$", "pause": 5, "strip_locale": true},
     "aixploria":     {"index": "https://www.aixploria.com/sitemap.xml", "shards": "sitemap-posttype-post\\.20(2[6-9]|[3-9]\\d)\\d{2}\\.xml$", "pause": 2},
     "ai-bot.cn":     {"index": "https://ai-bot.cn/sitemap.xml", "pause": 3},
     "opentools":     {"index": "https://opentools.ai/sitemap.xml", "shards": "/(tools|llms|mcp)-sitemap\\.xml$", "pause": 2},
