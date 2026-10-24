@@ -67,7 +67,7 @@ def _markdown(report: dict) -> str:
             lines.append(f"扫描时间：{row.get('scan_started_at')} → {row.get('scan_finished_at')}")
             lines.append(f"配置路径：{', '.join(report['configured_scopes'].get(site, {}).get('path_prefixes', []))}")
             for item in row.get("new_urls", []):
-                lines.append(f"- {item['url']}（first_seen：{item.get('first_seen', 'unknown')}；lastmod：{item.get('lastmod', 'unknown')}）")
+                lines.append(f"- <{item['url']}> （first_seen：{item.get('first_seen', 'unknown')}；lastmod：{item.get('lastmod', 'unknown')}）")
         lines.append("")
     if report["errors"]:
         lines.append("校验问题：" + "; ".join(report["errors"]))
