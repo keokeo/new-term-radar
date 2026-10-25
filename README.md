@@ -278,7 +278,20 @@ python scripts/gsc_auth.py gsc_client.json   # opens a browser once, writes gsc_
 
 ### Mail (optional)
 
-`--mail` sends the report through [Resend](https://resend.com). Set `RESEND_API_KEY`, `EMAIL_FROM` (an address on a domain you verified there) and `RADAR_EMAIL_TO` (comma-separated). `pip install markdown` for the HTML version.
+`--mail` sends the HTML report to `RADAR_EMAIL_TO` (comma-separated for several recipients). Install `markdown` with `pip install markdown` or `pip install -r requirements.txt`. Set `RADAR_MAIL_PROVIDER` to `gmail_smtp` or `resend`; it defaults to `resend` for existing setups.
+
+**Gmail SMTP, no domain needed:** enable Google 2-Step Verification, then create a [16-character app password](https://support.google.com/accounts/answer/185833). Set `GMAIL_USER` to your full Gmail address and `GMAIL_APP_PASSWORD` to the app password, not your usual Google password. Set `RADAR_MAIL_PROVIDER=gmail_smtp`. The sender is always `GMAIL_USER`; `EMAIL_FROM` is only used by Resend. SMTP uses Python's standard library.
+
+For GitHub Actions, test before enabling scheduled delivery:
+
+1. Store `GMAIL_USER` and `GMAIL_APP_PASSWORD` as repository secrets. Keep passwords out of `config.json` and Git.
+2. Add the repository secret `RADAR_TEST_EMAIL_TO` with one test recipient.
+3. In Actions, manually run **Test radar email**, selecting `gmail_smtp`. It sends only a fixed test message, without running the radar, calling AIsa, or changing its state.
+4. Check the received email, including the spam folder. Once it works, set the repository variable `RADAR_MAIL_PROVIDER` to `gmail_smtp`, then add the production recipient secret `RADAR_EMAIL_TO` to enable scheduled delivery.
+
+The existing schedule sends a daily report and sends `sources` reports when there are new names or errors. Missing `RADAR_EMAIL_TO` keeps scheduled email off; the test uses only `RADAR_TEST_EMAIL_TO`.
+
+**Resend:** set `RESEND_API_KEY`, `EMAIL_FROM` (an address on a domain verified in [Resend](https://resend.com)), and `RADAR_EMAIL_TO`. Use `RADAR_MAIL_PROVIDER=resend`, or leave the provider unset. The manual email test also supports `resend`, using `onboarding@resend.dev`, which can send only to the email address associated with the Resend account.
 
 ## Use it from an agent: skills and an MCP server
 
@@ -341,7 +354,7 @@ Point `RADAR_STATE` at the directory your scheduled runs write to and `recent_le
 
 1. Fork the repository (a private fork is fine).
 2. Remove `config.json` from `.gitignore` and commit your config. It holds no secrets.
-3. Add the secret `AISA_API_KEY`; optionally `GOANYAPI_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `RADAR_EMAIL_TO`, `GSC_TOKEN_JSON`.
+3. Add the secret `AISA_API_KEY`; optionally `GOANYAPI_API_KEY` and `GSC_TOKEN_JSON`. For email, follow [Mail](#mail-optional): Gmail uses `GMAIL_USER` and `GMAIL_APP_PASSWORD`, or Resend uses `RESEND_API_KEY` and `EMAIL_FROM`. Test first, then set `RADAR_EMAIL_TO`; Gmail also needs the repository variable `RADAR_MAIL_PROVIDER=gmail_smtp`.
 4. Set the repository variable `RADAR_ENABLED` to `true`.
 
 ## How the pieces decide

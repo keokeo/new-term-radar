@@ -273,7 +273,20 @@ python scripts/gsc_auth.py gsc_client.json   # 打开一次浏览器授权，写
 
 ### 邮件（可选）
 
-`--mail` 通过 [Resend](https://resend.com) 发送报告。设置 `RESEND_API_KEY`、`EMAIL_FROM`（你在 Resend 验证过的域名下的地址）和 `RADAR_EMAIL_TO`（多个用逗号分隔）。要 HTML 版需要 `pip install markdown`。
+`--mail` 将 HTML 报告发到 `RADAR_EMAIL_TO`（多个收件人用逗号分隔）。先运行 `pip install markdown` 或 `pip install -r requirements.txt`。`RADAR_MAIL_PROVIDER` 可设为 `gmail_smtp` 或 `resend`；为兼容已有配置，默认是 `resend`。
+
+**Gmail SMTP，不需要域名：**先开启 Google 两步验证，再创建 [16 位应用专用密码](https://support.google.com/accounts/answer/185833)。`GMAIL_USER` 填完整 Gmail 地址，`GMAIL_APP_PASSWORD` 填应用专用密码，不要填平时登录 Google 的密码。设置 `RADAR_MAIL_PROVIDER=gmail_smtp`。发件人固定为 `GMAIL_USER`，`EMAIL_FROM` 仅用于 Resend。SMTP 使用 Python 标准库，无需额外安装邮件客户端。
+
+在 GitHub Actions 上，先测试再开启定时发信：
+
+1. 把 `GMAIL_USER`、`GMAIL_APP_PASSWORD` 存为仓库 secrets，密码不要写进 `config.json` 或提交到 Git。
+2. 添加仓库 secret `RADAR_TEST_EMAIL_TO`，填一个测试收件地址。
+3. 在 Actions 里手动运行 **Test radar email**，选择 `gmail_smtp`。它只发一封固定正文的测试邮件，不运行雷达、不调用 AIsa，也不改变雷达状态。
+4. 确认收到邮件，并检查垃圾邮件文件夹。测试通过后，把仓库变量 `RADAR_MAIL_PROVIDER` 设为 `gmail_smtp`，最后添加正式收件人 secret `RADAR_EMAIL_TO`，开启定时推送。
+
+原有频率保持不变：每天发送日报，`sources` 有新名字或错误时也会发送报告。没有 `RADAR_EMAIL_TO` 时，定时邮件保持关闭；测试只读取 `RADAR_TEST_EMAIL_TO`。
+
+**Resend：**设置 `RESEND_API_KEY`、`EMAIL_FROM`（你在 [Resend](https://resend.com) 验证过的域名下的地址）和 `RADAR_EMAIL_TO`。`RADAR_MAIL_PROVIDER` 设为 `resend`，或保持不设置。手动邮件测试也支持 `resend`，使用 `onboarding@resend.dev` 发信，只能发到 Resend 账户的注册邮箱。
 
 ## 在 agent 里用：skill 和 MCP 服务器
 
@@ -336,7 +349,7 @@ npx skills add zhuyansen/new-term-radar
 
 1. Fork 这个仓库（私有 fork 也可以）。
 2. 把 `config.json` 从 `.gitignore` 里删掉，提交你的配置。配置里没有任何密钥。
-3. 添加 secret `AISA_API_KEY`；可选 `GOANYAPI_API_KEY`、`RESEND_API_KEY`、`EMAIL_FROM`、`RADAR_EMAIL_TO`、`GSC_TOKEN_JSON`。
+3. 添加 secret `AISA_API_KEY`；可选 `GOANYAPI_API_KEY`、`GSC_TOKEN_JSON`。邮件按上方「邮件（可选）」配置：Gmail 使用 `GMAIL_USER`、`GMAIL_APP_PASSWORD`，Resend 使用 `RESEND_API_KEY`、`EMAIL_FROM`。先测试，再设置 `RADAR_EMAIL_TO`；Gmail 还需仓库变量 `RADAR_MAIL_PROVIDER=gmail_smtp`。
 4. 把仓库变量 `RADAR_ENABLED` 设为 `true`。
 
 ## 各部分怎么判断

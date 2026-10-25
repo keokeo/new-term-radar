@@ -1,9 +1,18 @@
 name: Test radar email
 
-# Manual delivery check only. The resend.dev sender can send only to the
-# email address associated with the Resend account.
+# Manual delivery check only: no radar collection or state changes.
+# The resend.dev test sender can send only to the Resend account email address.
 on:
   workflow_dispatch:
+    inputs:
+      provider:
+        description: "Email provider to test"
+        type: choice
+        options:
+          - gmail_smtp
+          - resend
+        required: true
+        default: gmail_smtp
 
 permissions:
   contents: read
@@ -27,6 +36,9 @@ jobs:
 
       - name: Send a test email
         env:
+          RADAR_MAIL_PROVIDER: ${{ inputs.provider || 'gmail_smtp' }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           RADAR_EMAIL_TO: ${{ secrets.RADAR_TEST_EMAIL_TO }}
           EMAIL_FROM: onboarding@resend.dev
@@ -36,12 +48,10 @@ jobs:
           from pathlib import Path
           from radar import notify
 
-          for name in ("RESEND_API_KEY", "RADAR_EMAIL_TO"):
-              if not os.environ.get(name, "").strip():
-                  setting = "RADAR_TEST_EMAIL_TO" if name == "RADAR_EMAIL_TO" else name
-                  raise SystemExit(f"Set the repository secret {setting} before running this test.")
+          if not os.environ.get("RADAR_EMAIL_TO", "").strip():
+              raise SystemExit("Set the repository secret RADAR_TEST_EMAIL_TO before running this test.")
           if len(notify.recipients(os.environ["RADAR_EMAIL_TO"])) != 1:
-              raise SystemExit("Set RADAR_TEST_EMAIL_TO to your single Resend account email address.")
+              raise SystemExit("Set RADAR_TEST_EMAIL_TO to a single test recipient email address.")
 
           message = "\n".join([
               "## 新词雷达 · 邮件推送测试",
