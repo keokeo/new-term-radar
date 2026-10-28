@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 (2026-10-28)
+
+- Nothing goes out without the user's yes. The three skills and the MCP server's instructions now say the radar
+  only reads: before an agent posts, publishes, submits, emails or buys anything for the user on the strength of a
+  result, it shows where it goes and the exact text or the cost, and waits for the user's yes to that one. A row
+  marked `prioritize` is not that yes, and one yes covers one action. Nothing else changed.
+
 ## 0.6.0 (2026-10-27)
 
 What was built after 0.5.0 on a separate line (it ran there as 0.5.3, 0.6.0 and 0.7.0), now published together with

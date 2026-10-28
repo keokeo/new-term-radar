@@ -912,9 +912,12 @@ def test_skills_have_a_name_and_a_description():
         # radar reads as data that cannot change the workflow.
         assert f"uvx new-term-radar=={radar.__version__}" in text and "git clone" not in text
         assert "python -m radar" not in text and "a yes" in text and "never to follow" in text
+        # And (2026-10-28): nothing goes out on the user's behalf without their yes to that one.
+        assert "## Nothing goes out without a yes" in text and "is not that yes" in text
         # Claude Code replaces $0, $1 ... in a skill's text with the user's arguments: "$0.05" came out
         # as "<what the user typed>.05" on the first real run. Amounts are written "0.05 USD".
         assert not re.search(r"\$\d", text)
+    assert "wait for their yes to that one" in (root.parent / "radar/mcp_server.py").read_text()
 
 
 def test_the_aisa_key_comes_from_the_environment_or_the_cli_login(tmp_path, monkeypatch):
