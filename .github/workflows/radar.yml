@@ -80,6 +80,7 @@ jobs:
         env:
           AISA_API_KEY: ${{ secrets.AISA_API_KEY }}
           GOANYAPI_API_KEY: ${{ secrets.GOANYAPI_API_KEY }}
+          TRUSTMRR_API_KEY: ${{ secrets.TRUSTMRR_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           GSC_TOKEN_JSON: ${{ secrets.GSC_TOKEN_JSON }}
           RADAR_MAIL_PROVIDER: ${{ vars.RADAR_MAIL_PROVIDER || 'resend' }}
