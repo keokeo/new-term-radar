@@ -47,7 +47,7 @@
   "asks": {"extra_sources": []},
   "sellers": {"platforms": ["stripe", "polar", "lemonsqueezy", "gumroad", "creem"]},
   "builders": {"weekday": null},
-  "feeds": {"enabled": []},
+  "feeds": {"enabled": ["producthunt", "hn", "openrouter", "civitai", "appstore", "awesome"]},
   "money": {"weekday": null},
   "sidelights": {"names": 0, "whois_names": 0, "products": 0},
   "review": {"after_days": 14, "per_day": 5},
