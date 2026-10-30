@@ -24,3 +24,7 @@ Actions 缓存过期时仍可补回这份历史基线，但种子之后新增的
 结果在工作流摘要和产物的 `competitors-report.md`、`competitors-report.json`、`competitors-status.json` 中。JSON 保存完整新增 URL、扫描时间、配置覆盖以及正式快照未变的哈希证明。任一站未完整成功、robots 未核验、基线未复用或正式快照变化时，验收失败并保留错误证据。
 
 完整日报仍按原邮件逻辑发送；新 URL 只是选词线索，不自动等于热门产品或欧美搜索需求。
+
+## LightX
+
+`config.json` 同时监控 LightX（`www.lightxeditor.com`）的公开 sitemap，递归读取全部分片，保留已见 URL，并检查 robots。首次成功扫描仅建立基线，后续新增页面进入日常日报；未完整扫描成功时保留此前基线。LightX 不属于上述两站的种子导入及 `competitors` 专用验收范围。
