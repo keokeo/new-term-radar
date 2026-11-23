@@ -15,15 +15,15 @@ name: New-term radar
 # GSC_TOKEN_JSON (the Search Console signal).
 #
 # State lives in a shared Actions cache, with one entry per run attempt. The two
-# competitor seeds only fill missing snapshots. A missing cache still loses other
-# source history, so keep the uploaded state backups when that history matters.
+# competitor seeds only fill missing snapshots. The pre-outage artifact can boot
+# an empty main cache while it is retained. Other site baselines must rebuild.
 # Manual "competitors" validates only public sitemap scopes in a temporary copy;
 # it has no API/mail credentials and leaves new URLs for the next daily report.
 
 on:
   schedule:
-    - cron: "0 0,8,16 * * *"   # sources
-    - cron: "30 1 * * *"       # daily
+    - cron: "13 0,8,16 * * *"  # sources, offset from the top of the hour
+    - cron: "30 1 * 1-12 *"    # daily at 09:30 Asia/Singapore
   workflow_dispatch:
     inputs:
       command:
@@ -42,6 +42,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   radar:
@@ -49,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      COMMAND: ${{ github.event.inputs.command || (github.event.schedule == '30 1 * * *' && 'daily' || 'sources') }}
+      COMMAND: ${{ github.event.inputs.command || (github.event.schedule == '30 1 * 1-12 *' && 'daily' || 'sources') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -66,6 +67,62 @@ jobs:
           path: state
           key: radar-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: radar-state-
+
+      - name: Download the November 14 backup when the cache is empty
+        id: recovery-artifact
+        if: >-
+          github.repository == 'keokeo/new-term-radar' &&
+          github.ref == 'refs/heads/main' &&
+          steps.restore-state.outputs.cache-matched-key == '' &&
+          hashFiles('state/radar.db') == ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 43459323857
+          artifact-ids: 14054469287
+          merge-multiple: true
+          path: ${{ runner.temp }}/radar-recovery
+
+      - name: Restore the database and competitor snapshots
+        if: steps.recovery-artifact.outcome == 'success'
+        env:
+          RADAR_RECOVERY: ${{ runner.temp }}/radar-recovery
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sqlite3
+          from pathlib import Path
+
+          from scripts.seed_competitor_sitemaps import RepositoryFiles, SITES, validate_snapshot
+
+          backup = RepositoryFiles(Path(os.environ["RADAR_RECOVERY"]))
+          workspace = RepositoryFiles(Path.cwd())
+          try:
+              config = json.loads(workspace.read(("config.json",)))
+              database = ("state", "radar.db")
+              data = backup.read(database)
+              with sqlite3.connect(":memory:") as db:
+                  db.deserialize(data)
+                  if db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                      raise ValueError("Backup database failed SQLite integrity check")
+                  leads = db.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
+              files = [(database, data, f"{leads} leads")]
+              for site, host in SITES.items():
+                  target = ("state", "sitemaps", f"{site}.json.gz")
+                  snapshot = backup.read(target)
+                  count = validate_snapshot(snapshot, config["sitemaps"][site], host)
+                  files.append((target, snapshot, f"{count} known URLs"))
+              for target, data, description in files:
+                  if workspace.publish(target, data):
+                      print(f"Restored {target[-1]}: {description}")
+                  else:
+                      print(f"Kept existing {target[-1]}")
+          finally:
+              backup.close()
+              workspace.close()
+          PY
 
       - name: Import missing competitor baselines
         id: competitor-seed
