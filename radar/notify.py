@@ -117,6 +117,9 @@ def _gmail(subject: str, md_text: str, to: list[str]) -> str:
 
 
 def _resend(subject: str, md_text: str, to: list[str]) -> str:
+    missing = [name for name in ("RESEND_API_KEY", "EMAIL_FROM") if not os.environ.get(name, "").strip()]
+    if missing:
+        raise SystemExit(f"mail requires {', '.join(missing)}")
     sender = _required("EMAIL_FROM")
     key = _required("RESEND_API_KEY")
     body = json.dumps({"from": sender, "to": to, "subject": subject, "html": html(md_text)}).encode()

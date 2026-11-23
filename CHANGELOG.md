@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.7.1 (2026-11-21)
+
+- **README: how early, as far as it was checked.** "Not two weeks later" and "days or weeks later" rested on one case:
+  Strata, which the radar named three days before its rise in DataForSEO Trends. The README now says that case and
+  no more (also in the Chinese README).
+- **README: `--mail` needs the `mail` extra.** The report is always mailed as HTML, built with `markdown`, so an
+  install from PyPI needs `pip install "new-term-radar[mail]"` (or `uvx --from "new-term-radar[mail]" …`); from a
+  clone, `pip install markdown`.
+- No change to the code.
+
+## 0.7.0 (2026-11-21)
+
+- **⑨ Just listed: There's An AI For That's own list** (`taaft` feed, PR #11 by @shineforever): read day by day
+  through GoAnyAPI (5 credits a day), with each tool's category and description. It runs only when a GoAnyAPI key is
+  set; without one, `google_new`'s weekly `site:` query still covers the directory.
+- **Feeds drop repeated links before the per-feed limit** (PR #12 by @iyuzhang): the same tool listed twice no longer
+  takes two places and pushes another new one out.
+- The mail test is skipped when the optional `mail` extra (markdown) is not installed.
+- **⑤ Review**: `rose()` now scans `first_rise` starting from `first_seen` (`after_pts`) rather than across the whole
+  window including the pre-report baseline, fixing negative `lead_days` when a variant had a spike before it was
+  reported. Synced the October 27 retro rules into `review.py`: pre-existing terms (`born_day < 2026-10-03 - 14d` or
+  baseline `>= 25`) are marked `unclear` (`pre_existing` or `high_baseline`) and excluded from the hit-rate denominator;
+  multi-source attribution tracks `first_source` vs `all_sources`.
+- **② GitHub breakout**: `breakouts()` records each repo's `born` date (`created_at[:10]`), `shown()` preserves all
+  newly emerged breakouts (`is_new`) before filling the top-15 display slice with older repos, and `breakouts()` supports
+  optional shadow queries (`young_days`/`young_min_stars` for 3-day young repos and `late_days`/`late_min_stars` for
+  older repos breaking out now).
+- **Keyword table (`KGR`)**: `competition.py` computes `kgr_of(built, volume)` (`pages built / monthly searches`:
+  `< 0.25` great, `<= 1.0` watch, `> 1.0` skip) and shows `KGR` in the `Page one` column when GoAnyAPI `pages_built`
+  and monthly volume are present.
+- **⑦ AI answers multi-run distribution & first pick**: `ai_answers.py` records `first_pick` (the first tool named) and
+  supports `"runs": N` (`N >= 2`) to sample each engine multiple times, aggregating tool counts, cited-site counts,
+  first-pick counts and empty-run `gap` rate (`>= 80%` empty runs).
+- **Fixes**: `radar.__init__.UA` now uses `__version__`; `notify.send()` raises a clear `SystemExit` when
+  `RESEND_API_KEY` or `EMAIL_FROM` is missing instead of `KeyError`; `mcp_server.run_radar()` raises `ToolError` on an
+  invalid `command`; `pains` report and docs now match the four sources read (Chrome Web Store, App Store, Reddit and
+  YouTube comments); cost summary notes `AIsa + GoAnyAPI`.
+
 ## 0.6.1 (2026-10-28)
 
 - Nothing goes out without the user's yes. The three skills and the MCP server's instructions now say the radar
