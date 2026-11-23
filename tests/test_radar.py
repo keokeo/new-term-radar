@@ -5,6 +5,8 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
+
 from radar import __main__ as cli
 from radar import breakout, config, gsc, i18n, judge, new_sites, notify, report, review, sitemaps, store
 from radar import page_age as _page_age
@@ -499,6 +501,7 @@ def test_every_text_has_both_languages():
 
 
 def test_mail_html_renders_tables():
+    pytest.importorskip("markdown")          # the optional "mail" extra
     out = notify.html("| a | b |\n|---|---|\n| 1 | 2 |")
     assert "<table style=" in out and ">1</td>" in out
     # Gmail drops a <style> block outside <head>: every tag carries its own style.
@@ -897,6 +900,9 @@ def test_mcp_tools_say_why_they_failed(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "kept_leads", read_only)
     with pytest.raises(mcp_server.ToolError, match="Read-only file system.*RADAR_STATE sets the folder"):
         mcp_server.recent_leads(7)
+    import asyncio
+    with pytest.raises(mcp_server.ToolError, match='command must be "sources" or "daily"'):
+        asyncio.run(mcp_server.run_radar("weekly"))
 
 
 def test_skills_have_a_name_and_a_description():
@@ -1522,12 +1528,56 @@ def test_feeds_take_a_snapshot_first_then_report_what_is_new(cfg, tmp_path, monk
     assert feeds.TOOLISH.search("AI换脸特效") and not feeds.TOOLISH.search("Chair")
 
 
+def test_feeds_deduplicate_shared_links_before_applying_limit(cfg, tmp_path, monkeypatch):
+    cfg["feeds"]["enabled"] = ["awesome"]
+    cfg["feeds"]["awesome"] = ["https://raw.example/one", "https://raw.example/two"]
+    cfg["feeds"]["max_per_feed"] = 2
+    pages = {url: "- [Oldtool](https://old.example) - existing tool\n" for url in cfg["feeds"]["awesome"]}
+    monkeypatch.setattr(feeds, "get", lambda url: pages[url].encode())
+    first = feeds.feeds(cfg, tmp_path, today=date(2026, 11, 12))
+    assert first["terms"] == []
+
+    pages["https://raw.example/one"] += "- [Newtool](https://new.example) - new tool\n"
+    pages["https://raw.example/two"] += (
+        "- [Newtool](https://new.example) - the same tool\n"
+        "- [Nexttool](https://next.example) - another tool\n"
+    )
+    result = feeds.feeds(cfg, tmp_path, today=date(2026, 11, 13))
+
+    assert [item["key"] for item in result["new"]["awesome"]] == [
+        "https://new.example", "https://next.example"
+    ]
+    assert [item["term"] for item in result["terms"]] == ["newtool", "nexttool"]
+    assert feeds.feeds(cfg, tmp_path, today=date(2026, 11, 14))["terms"] == []
+
+
 def test_weekly_feeds_wait_for_their_day(cfg, tmp_path, monkeypatch):
     cfg["feeds"]["enabled"], cfg["feeds"]["weekly"], cfg["feeds"]["weekday"] = ["rising"], ["rising"], 0
     asked = []
     monkeypatch.setattr(feeds.goanyapi, "related_queries", lambda seed: (asked.append(seed) or {"rising": [f"{seed} free"]}, 6000))
     assert feeds.feeds(cfg, tmp_path, today=date(2026, 10, 14))["read"] == {} and asked == []          # a Wednesday
     assert feeds.feeds(cfg, tmp_path, today=date(2026, 10, 14), weekly=True)["read"]["rising"] == len(cfg["feeds"]["seeds"])
+
+
+def test_the_taaft_feed_reads_the_directory_listing_through_goanyapi(cfg, tmp_path, monkeypatch):
+    cfg["feeds"]["enabled"], cfg["feeds"]["weekly"] = ["taaft"], []
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    rows = [{"name": "ChatSweep", "domain": "chatgptbulkdelete.net", "category": "Bulk chat deletion", "pricing": "Free",
+             "about": "Delete ChatGPT chats in bulk.\nNot one by one.", "url": "https://theresanaiforthat.com/ai/chatsweep/",
+             "released": day},
+            {"name": "Old One", "domain": "old.example", "category": "Writing", "pricing": "", "about": "",
+             "url": "https://theresanaiforthat.com/ai/old-one/", "released": "2026-01-01 00:00:00"}]
+    monkeypatch.setattr(feeds.goanyapi, "taaft_just_released", lambda day="": (rows, 5000))
+    off = feeds.feeds(cfg, tmp_path / "off", today=date(2026, 10, 22))       # no key: the source stays off
+    assert off["read"] == {"taaft": 0} and off["cost_micros"] == 0 and not off["errors"]
+    monkeypatch.setenv("GOANYAPI_API_KEY", "k")
+    first = feeds.feeds(cfg, tmp_path, today=date(2026, 10, 22))
+    # a first run lists what the source itself dates as recent: the January entry waits for the next run
+    assert first["first_run"] == ["taaft"] and [x["term"] for x in first["terms"]] == ["chatsweep"]
+    assert first["terms"][0]["about"] == ("https://theresanaiforthat.com/ai/chatsweep/", "Delete ChatGPT chats in bulk. Not one by one.")
+    assert first["terms"][0]["examples"] == ["There's An AI For That · Bulk chat deletion: ChatSweep"] and first["cost_micros"] == 5000
+    again = feeds.feeds(cfg, tmp_path, today=date(2026, 10, 23))
+    assert not again["new"]["taaft"] and again["cost_micros"] == 5000        # a paid feed is read every run, reported once
 
 
 def test_money_finds_the_owners_other_sites_and_new_advertisers(cfg, tmp_path, monkeypatch):
@@ -2173,3 +2223,125 @@ def test_keyword_table_shows_the_year_your_rank_threads_and_the_dot_com(cfg, tmp
     zh = "\n".join(report.keyword_table(cfg, uc))
     assert "| 现在 | 近 12 个月 | 首次有搜索 |" in zh and "| **优先** · 你在第 1 → 更新现有页 |" in zh and "| 观察 → 新建页面 |" in zh
     assert "上升,6 个月 +120%" in zh and "首页上的论坛帖" in zh and "**synthiddetector.com 未注册**" in zh
+
+
+def test_review_rose_does_not_pick_a_baseline_blip_before_first_seen(monkeypatch):
+    import pytest
+    import radar
+    assert radar.__version__ in radar.UA
+    # baseline has a blip (30 on 09-20, above line=28.75) before first_seen (09-25), then real rise (60, 100) on 09-28..29
+    pts = _series([0, 30, 0, 0, 0, 0, 0, 0, 0, 60, 100, 80, 0, 0])
+    got = review.rose(pts, SEEN)
+    assert got["rose"] and got["first_rise"] == "2026-09-28" and got["earliest_rise"] == "2026-09-20"
+    v, lead = review.verdict({"v": got}, SEEN)
+    assert v == "hit" and lead == 3
+    assert review.unclear(date(2026, 10, 3), date(2026, 10, 5)) == "recording_start"
+    assert review.unclear(SEEN, date(2026, 9, 20), date(2026, 9, 24)) == "pre_existing"
+    assert review.unclear(SEEN, date(2026, 9, 25), date(2026, 9, 24)) == ""
+    t = review.tally([(["breakout"], "hit", 3, False), (["breakout"], "hit", -2, True), (["breakout"], "miss", None, False)])
+    assert t["breakout"] == {"checked": 3, "early": 1, "late": 0, "unclear": 1, "miss": 1, "no_data": 0, "median_lead": 3}
+
+    monkeypatch.setenv("RADAR_EMAIL_TO", "me@example.com")
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.delenv("EMAIL_FROM", raising=False)
+    with pytest.raises(SystemExit, match="mail requires RESEND_API_KEY, EMAIL_FROM"):
+        notify.send("subject", "body")
+
+
+def test_breakout_shown_keeps_new_repos_even_below_top_fifteen():
+    rows = [{"repo": f"old/{i}", "velocity": 1000 - i, "delta": None, "new": False} for i in range(15)] + [
+        {"repo": "new/gem", "velocity": 250, "delta": None, "new": True}]
+    kept = breakout.shown(rows)
+    assert len(kept) == 15 and any(r["repo"] == "new/gem" for r in kept)
+
+
+def test_kgr_and_ai_answers_multi_run_distribution(cfg, monkeypatch):
+    assert competition.kgr_of(20, 200) == (0.1, "great")
+    assert competition.kgr_of(150, 200) == (0.75, "watch")
+    assert competition.kgr_of(300, 200) == (1.5, "skip")
+    assert competition.kgr_of(10, 0) == (None, None)
+    comp = {"verdict": "open", "built": 20, "kgr": 0.1, "kgr_band": "great"}
+    assert "KGR 0.1 (<0.25)" in report._page_one(comp)
+
+    cfg["ai_answers"].update(enabled=True, engines=["chatgpt"], max_rows=1, runs=3)
+    replies = iter([
+        ({"brand_entities": [{"markdown": "ToolA"}, {"markdown": "ToolB"}], "sources": [{"domain": "a.com"}]}, 4000),
+        ({"brand_entities": [{"markdown": "ToolB"}], "sources": [{"domain": "b.com"}]}, 4000),
+        ({"brand_entities": [], "sources": []}, 4000),
+    ])
+    monkeypatch.setattr(ai_answers.aisa, "rest", lambda path, task: next(replies))
+    rows = [{"phrase": "convert slides to notes", "posts": [], "subreddits": []}]
+    cost, errors = ai_answers.assess(rows, cfg)
+    ai = rows[0]["ai"]
+    assert cost == 12000 and errors == [] and ai["runs"] == 3
+    assert ai["by"]["chatgpt"]["names"] == ["ToolB", "ToolA"] and ai["first_pick"] == {"chatgpt": "ToolB"}
+    assert ai["distribution"]["chatgpt"]["counts"] == {"ToolA": 1, "ToolB": 2} and not ai["gap"]
+    assert "ToolB (2/3)" in report._ai_cell(ai) and "ToolA (1/3)" in report._ai_cell(ai)
+    rendered = "\n".join(report._ai_lines(rows, cfg))
+    assert "ToolB (2/3), ToolA (1/3)" in rendered and "a.com (1/3)" in rendered
+
+
+
+def test_chat_cost_due_window_x_age_missing_visits_and_fan_out_modifiers(cfg, tmp_path, monkeypatch):
+    from radar import aisa
+    # 1. aisa.estimate_chat_cost & take_chat_cost
+    aisa.take_chat_cost()
+    assert aisa.estimate_chat_cost("claude-sonnet-4-6", {"usage": {"prompt_tokens": 1000, "completion_tokens": 200}}) == 6000
+    assert aisa.estimate_chat_cost("gpt-4.1-mini", {}, prompt_chars=400, answer_chars=100) > 0
+    monkeypatch.setattr(aisa, "_post", lambda url, body, timeout: {
+        "choices": [{"message": {"content": "ok"}}],
+        "usage": {"prompt_tokens": 500, "completion_tokens": 100},
+    })
+    assert aisa.chat("gpt-4.1-mini", "sys", "usr") == "ok"
+    assert aisa.take_chat_cost() == int(round(500 * 0.4 + 100 * 1.6))
+    assert aisa.take_chat_cost() == 0
+
+    # 2. store.due max_age_days prevents permanently stuck ancient leads from blocking the queue
+    conn = store.connect(tmp_path)
+    store.record(conn, [{"term": "ancient_stuck", "kinds": ["x"], "signals": ["s"]}], today=date(2026, 5, 1))
+    store.record(conn, [{"term": "fresh_due", "kinds": ["x"], "signals": ["s"]}], today=date(2026, 10, 1))
+    due_terms = [t for t, _, _ in store.due(conn, date(2026, 10, 20), after_days=14, limit=5)]
+    assert due_terms == ["fresh_due"]
+
+    # 3. asks.collect drops X posts whose date failed to parse (created == 0.0)
+    monkeypatch.setattr(asks.social, "reddit", lambda q, **k: ([], 0))
+    now_ts = datetime.now(timezone.utc).timestamp()
+    monkeypatch.setitem(asks.EXTRA, "x", lambda c: ([
+        {"id": "x:bad", "title": "old unparseable tweet", "text": "", "subreddit": "x", "score": 50, "url": "", "created": 0.0},
+        {"id": "x:good", "title": "recent tweet", "text": "", "subreddit": "x", "score": 50, "url": "", "created": now_ts - 3600},
+    ], 3000))
+    c_asks = dict(cfg["asks"], patterns=[], extra_sources=["x"])
+    kept_posts, _, _ = asks.collect(c_asks)
+    assert [p["id"] for p in kept_posts] == ["x:good"]
+
+    # 4. sellers drops sites whose visits lookup failed when GOANYAPI_API_KEY is configured
+    monkeypatch.setenv("GOANYAPI_API_KEY", "k")
+    cfg["sellers"]["platforms"] = ["stripe"]
+    rows = [("small-indie.app", "https://buy.stripe.com/a"), ("giant-failed.com", "https://buy.stripe.com/b")]
+    def seller_call(calls):
+        if calls[0]["tool"] == sellers.DOMAINS:
+            return _sites([d for d, _ in rows]), 27600
+        return _backlinks(rows), 27600
+    monkeypatch.setattr(sellers.aisa, "call", seller_call)
+    monkeypatch.setattr(sellers, "page_words", lambda host: ("Indie AI Tool", "automate tasks"))
+    monkeypatch.setattr(sellers.aisa, "chat", lambda model, system, user, max_tokens=1500: '[{"i": 0, "kind": "ai"}, {"i": 1, "kind": "ai"}]')
+    monkeypatch.setattr(sellers, "visits", lambda hosts: ({"small-indie.app": {"visits": 1200}}, 3000))
+    got_sellers = sellers.sellers(cfg, tmp_path / "sellers_state")
+    assert [s["host"] for s in got_sellers["sellers"]] == ["small-indie.app"]
+
+    # 5. ai_answers fan-out query modifier extraction & report rendering
+    cfg["ai_answers"].update(enabled=True, engines=["chatgpt"], max_rows=1, runs=2)
+    fan_replies = iter([
+        ({"brand_entities": [{"markdown": "ToolA"}], "sources": [{"domain": "a.com"}],
+          "fan_out_queries": ["best convert slides to notes github 2026", "convert slides to notes free comparison"]}, 4000),
+        ({"brand_entities": [{"markdown": "ToolA"}], "sources": [{"domain": "a.com"}],
+          "fan_out_queries": ["convert slides to notes github open source 2026"]}, 4000),
+    ])
+    monkeypatch.setattr(ai_answers.aisa, "rest", lambda path, task: next(fan_replies))
+    job_rows = [{"phrase": "convert slides to notes", "posts": [], "subreddits": []}]
+    ai_answers.assess(job_rows, cfg)
+    ai = job_rows[0]["ai"]
+    mods = {m["token"]: m["count"] for m in ai.get("fan_out_modifiers") or []}
+    assert mods.get("github") == 2 and mods.get("2026") == 2
+    ai_text = "\n".join(report._ai_lines(job_rows, cfg))
+    assert "fan-out modifiers: 2026 (2), github (2)" in ai_text

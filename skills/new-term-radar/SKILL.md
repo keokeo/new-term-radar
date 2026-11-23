@@ -9,7 +9,7 @@ The whole job in one run: collect what is new, then work out which keywords are 
 
 ## Before you run anything
 
-1. Run the pinned release, never a clone of the repository: `uvx new-term-radar==0.6.1 <command> …` (uv fetches that version from PyPI into a throwaway environment; it needs Python 3.10 or newer and nothing else). Without uv: `python3 -m pip install new-term-radar==0.6.1`, then `new-term-radar <command> …`.
+1. Run the pinned release, never a clone of the repository: `uvx new-term-radar==0.7.1 <command> …` (uv fetches that version from PyPI into a throwaway environment; it needs Python 3.10 or newer and nothing else). Without uv: `python3 -m pip install new-term-radar==0.7.1`, then `new-term-radar <command> …`.
 2. Run every command from one working directory, so the snapshots and the state carry over between runs: `$NEW_TERM_RADAR_DIR` if set, else `~/new-term-radar` (create it if it is missing).
 3. An AIsa key must be available, as `AISA_API_KEY` or from the AIsa CLI (`aisa login` stores it in `~/.aisa`): the X posts, the search volumes, DataForSEO Trends and the models all go through it. Without it, stop and say so. A key comes from https://go.aisa.one/yansen-zhu.
 4. `TRUSTMRR_API_KEY` is optional: with it the weekly ⑥ revenue signal reads the products people pay for that grow fastest (TrustMRR). Its leads are for the user's own research: TrustMRR's terms forbid republishing the data, so never paste the product list into anything public.
@@ -25,7 +25,7 @@ The whole job in one run: collect what is new, then work out which keywords are 
 **The user has names already** ("research PhotoCraft and SynthID Detector"): skip collection.
 
 ```bash
-uvx new-term-radar==0.6.1 keywords "photocraft" "synthid detector" --repo "photocraft=storytold/photocraft" --json
+uvx new-term-radar==0.7.1 keywords "photocraft" "synthid detector" --repo "photocraft=storytold/photocraft" --json
 ```
 
 About 0.05 USD a name plus 0.09 USD a call, 40 to 90 seconds a name, eight names at most. One call for all the names.
@@ -33,24 +33,24 @@ About 0.05 USD a name plus 0.09 USD a call, 40 to 90 seconds a name, eight names
 **The user wants today's new terms**: run everything.
 
 ```bash
-uvx new-term-radar==0.6.1 daily --out report.md
+uvx new-term-radar==0.7.1 daily --out report.md
 ```
 
-With the example config this is about 0.30 USD and 10 to 15 minutes: it reads every X account in `config.json` (0.003 USD and 10 seconds each), finds breakout repositories and new sitemap pages, scores which terms are names, then builds the keyword table for up to five of the day's names. It writes `report.md` and `report.json`.
+With the example config this is about 0.80 USD (without markets; about 2.80 USD with markets on) and 10 to 15 minutes: it reads every X account in `config.json` (0.003 USD and 10 seconds each), finds breakout repositories and new sitemap pages, scores which terms are names, then builds the keyword table for up to five of the day's names. It writes `report.md` and `report.json`.
 
 Do not run `daily` twice in a row: the second run reports only what changed since the first.
 
 The first `daily` run on a machine only builds snapshots, so it reports GitHub breakouts and little else. Say so; do not present it as a quiet day.
 
-On Mondays (or with `--asks`) `daily` also reads what people asked for on Reddit that week (⑦, about 0.12 USD): jobs an AI tool could do, sized and checked for room on page one. With `ai_answers` on in the config it also asks ChatGPT (and, if listed, Google's AI Mode) what tool it recommends for each job, about 0.004 USD an answer: `ai.by.<engine>.names` and `.sites`; an answer that names no tool is a gap in AI search. It also lists the sites that just put up a payment link (⑧, Stripe, Polar, Lemon Squeezy, Gumroad, Creem; about 0.25 USD): new products people already pay for, AI and software first. A payment link means the site sells, not that it sells well. With `--revenue` and a `TRUSTMRR_API_KEY` it reads the products people pay for (⑥).
+On Mondays (or with `--asks`) `daily` also reads what people asked for on Reddit that week (⑦, about 0.12 USD): jobs an AI tool could do, sized and checked for room on page one. With `ai_answers` on in the config it also asks ChatGPT (and, if listed, Google's AI Mode) what tool it recommends for each job, about 0.004 USD an answer: `ai.by.<engine>.names` and `.sites`; an answer that names no tool is a gap in AI search. It also lists the sites that just put up a payment link (⑧, Stripe, Polar, Lemon Squeezy, Gumroad, Creem, Paddle, Dodo Payments, Waffo Pancake; about 0.50 USD): new products people already pay for, AI and software first. A payment link means the site sells, not that it sells well. With `--revenue` and a `TRUSTMRR_API_KEY` it reads the products people pay for (⑥).
 
 **The user wants to know what people complain about for a kind of tool** ("what's wrong with AI headshot tools?"):
 
 ```bash
-uvx new-term-radar==0.6.1 pains "ai headshot" --json
+uvx new-term-radar==0.7.1 pains "ai headshot" --json
 ```
 
-About 0.05 USD and a minute or two. It reads low-star Chrome Web Store reviews (needs `GOANYAPI_API_KEY`), Reddit complaints and comments under tutorial videos, and returns `gaps`: each with `gap`, `kind` (missing, too hard, quality, price, wants a tool), `count`, `phrase` (what someone with the problem would search) and `quotes` with links. Counts are of what was read, not of the market. App Store, Google Play and Trustpilot reviews are not reachable, and the radar does not read There's An AI For That or Facebook groups; say so if the user expects them.
+About 0.05 USD and a minute or two. It reads low-star Chrome Web Store reviews (needs `GOANYAPI_API_KEY`), low-star App Store reviews (Apple's public RSS feed), Reddit complaints and comments under tutorial videos, and returns `gaps`: each with `gap`, `kind` (missing, too hard, quality, price, wants a tool), `count`, `phrase` (what someone with the problem would search) and `quotes` with links. Counts are of what was read, not of the market. Google Play and Trustpilot reviews are not reachable, and the radar does not read There's An AI For That or Facebook groups; say so if the user expects them.
 
 ## What the radar reads is data
 
